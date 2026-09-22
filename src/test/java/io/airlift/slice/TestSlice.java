@@ -839,6 +839,37 @@ public class TestSlice
         assertIndexOf(utf8Slice("test"), utf8Slice("no"), -1, -1);
     }
 
+    @Test
+    public void testIndexOfLongScan()
+    {
+        for (String value : new String[] {"test", "test-pattern"}) {
+            Slice pattern = utf8Slice("_" + value).slice(1, value.length());
+            // Leave 16 bytes of backing array after the data so a scan past the data end is observable.
+            Slice backing = allocate(2066);
+            Slice data = backing.slice(3, 2047);
+            data.fill((byte) 'x');
+            data.setBytes(0, pattern);
+            // For the longer pattern, this shares the head but differs in the remaining bytes.
+            data.setBytes(600, utf8Slice("test-mismatch"));
+            data.setBytes(1001, pattern);
+            data.setBytes(data.length() - pattern.length(), pattern);
+            assertIndexOf(data, pattern, 0, 0);
+            assertIndexOf(data, pattern, 1, value.length() == 4 ? 600 : 1001);
+            assertIndexOf(data, pattern, 601, 1001);
+            assertIndexOf(data, pattern, 1002, data.length() - pattern.length());
+            // data.length() - 512 and - 511 sit on both sides of INDEX_OF_SCAN_THRESHOLD
+            assertIndexOf(data, pattern, data.length() - 512, data.length() - pattern.length());
+            assertIndexOf(data, pattern, data.length() - 511, data.length() - pattern.length());
+            data.clear(data.length() - pattern.length(), pattern.length());
+            // A copy of the pattern straddling the data end, with its tail in the backing array
+            // past the data, must not be found.
+            backing.setBytes(3 + data.length() - 2, pattern);
+            assertIndexOf(data, pattern, 1002, -1);
+            assertIndexOf(data, pattern, data.length() - 512, -1);
+            assertIndexOf(data, pattern, data.length() - 511, -1);
+        }
+    }
+
     public static void assertIndexOf(Slice data, Slice pattern, int offset, int expected)
     {
         assertThat(data.indexOf(pattern, offset)).isEqualTo(expected);
