@@ -1034,6 +1034,38 @@ public class TestSlice
     }
 
     @Test
+    public void testIndexOfAnyByteLongScan()
+    {
+        // The slice ends 8 bytes before its backing array; those bytes hold the needles absent from
+        // the slice, so a scan that runs past the slice end finds a match instead of returning -1.
+        Slice backing = allocate(8216);
+        for (int index = 8208; index < backing.length(); index++) {
+            backing.setByte(index, index % 2 == 0 ? 'x' : 'y');
+        }
+        Slice slice = backing.slice(3, 8205);
+        slice.setByte(0, 'a');
+        slice.setByte(5001, 'a');
+        slice.setByte(6002, 'b');
+        slice.setByte(slice.length() - 1, '!');
+        // slice.length() - 4096 and - 4095 sit on both sides of LONG_SCAN_THRESHOLD
+        for (int offset : new int[] {0, 1, 3, 4096, slice.length() - 4096, slice.length() - 4095}) {
+            for (byte first : new byte[] {'a', 'b', '!', 'x'}) {
+                for (byte second : new byte[] {'a', 'b', '!', 'y'}) {
+                    int expected = -1;
+                    for (int index = offset; index < slice.length(); index++) {
+                        byte current = slice.getByte(index);
+                        if (current == first || current == second) {
+                            expected = index;
+                            break;
+                        }
+                    }
+                    assertThat(slice.indexOfAnyByte(first, second, offset)).isEqualTo(expected);
+                }
+            }
+        }
+    }
+
+    @Test
     public void testLastIndexOfByte()
     {
         Slice slice = utf8Slice("appleappleappleappleappleappleappleappleappleappleappleappleappleappleapple!");

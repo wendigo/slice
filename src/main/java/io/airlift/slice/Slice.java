@@ -1140,6 +1140,14 @@ public final class Slice
     }
 
     /**
+     * Minimum scan length (in bytes) at which {@link #indexOfAnyByte} delegates to the static
+     * {@link #scanForAnyByte} helper. Below this threshold the inline loop measured marginally faster
+     * and avoids the extra call; above it the helper measured about 2.1x faster at 8 KiB and 1.75x at
+     * 32 KiB on Apple M4 Max (see the note on {@link #scanForAnyByte}). Chosen empirically.
+     */
+    private static final int LONG_SCAN_THRESHOLD = 4096;
+
+    /**
      * Returns the index of the first occurrence of any of the given bytes at or after {@code offset},
      * or {@code -1} if none occurs in the remainder of this slice.
      * The returned index is absolute, not relative to {@code offset}.
@@ -1147,6 +1155,14 @@ public final class Slice
     public int indexOfAnyByte(byte first, byte second, int offset)
     {
         checkFromIndexSize(offset, 0, size);
+
+        // Long scans go through the static helper, which operates on the backing array as a
+        // parameter; short scans use the inline loop below.
+        if (size - offset >= LONG_SCAN_THRESHOLD) {
+            int arrayOffset = baseOffset;
+            int found = scanForAnyByte(base, arrayOffset + offset, arrayOffset + size, first, second);
+            return found < 0 ? -1 : found - arrayOffset;
+        }
 
         long firstPattern = repeat(first);
         long secondPattern = repeat(second);
@@ -1162,6 +1178,36 @@ public final class Slice
             byte current = getByteUnchecked(offset);
             if (current == first || current == second) {
                 return offset;
+            }
+        }
+        return -1;
+    }
+
+    /**
+     * Scans {@code array} in {@code [index, limit)} for the first occurrence of either {@code first}
+     * or {@code second}, returning the absolute array index or {@code -1}.
+     *
+     * <p>Kept as a {@code static} method taking the array as a parameter on purpose: on Apple M4 Max,
+     * full scans measured about 2.1x faster at 8 KiB and 1.75x at 32 KiB than the same loop reading
+     * through the instance fields. The cause was not isolated, so no JIT mechanism is claimed here.
+     */
+    private static int scanForAnyByte(byte[] array, int index, int limit, byte first, byte second)
+    {
+        long firstPattern = repeat(first);
+        long secondPattern = repeat(second);
+
+        for (; index <= limit - 8; index += 8) {
+            long value = (long) LONG_HANDLE.get(array, index);
+            long matches = match(value, firstPattern) | match(value, secondPattern);
+            if (matches != 0) {
+                return index + (numberOfTrailingZeros(matches) >>> 3);
+            }
+        }
+
+        for (; index < limit; index++) {
+            byte current = array[index];
+            if (current == first || current == second) {
+                return index;
             }
         }
         return -1;
