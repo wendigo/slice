@@ -861,6 +861,9 @@ public class TestSliceUtf8
         assertCaseChange(STRING_NAIVE);
         assertCaseChange(STRING_OO);
         assertCaseChange(STRING_ASCII_CODE_POINTS);
+        // Start translation before the ASCII range and keep every byte in a full word.
+        assertCaseChange("a" + STRING_ASCII_CODE_POINTS + "aaaaaaaa");
+        assertCaseChange("A" + STRING_ASCII_CODE_POINTS + "AAAAAAAA");
         assertCaseChange(STRING_ALL_CODE_POINTS);
         assertCaseChange(STRING_ALL_CODE_POINTS_RANDOM);
 

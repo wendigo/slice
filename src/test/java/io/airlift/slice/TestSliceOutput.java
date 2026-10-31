@@ -133,6 +133,21 @@ public class TestSliceOutput
     }
 
     @Test
+    public void testDynamicWriteZeroBulk()
+    {
+        int bulk = SliceOutput.BULK_ZERO_FILL_THRESHOLD;
+        DynamicSliceOutput output = new DynamicSliceOutput(100);
+        output.getUnderlyingSlice().fill((byte) 0x7F);
+        output.writeShort(0x0102);
+        output.writeZero(bulk);
+
+        assertThat(output.size()).isEqualTo(2 + bulk);
+        assertThat(output.getUnderlyingSlice().length()).isGreaterThan(100);
+        assertThat(output.slice().getShort(0)).isEqualTo((short) 0x0102);
+        assertThat(output.slice().getBytes(2, bulk)).isEqualTo(new byte[bulk]);
+    }
+
+    @Test
     public void testReset()
     {
         assertReset(new DynamicSliceOutput(1));

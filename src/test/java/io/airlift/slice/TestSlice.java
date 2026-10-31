@@ -839,6 +839,27 @@ public class TestSlice
         assertIndexOf(utf8Slice("test"), utf8Slice("no"), -1, -1);
     }
 
+    @Test
+    public void testIndexOfLongScan()
+    {
+        for (String value : new String[] {"test", "test-pattern"}) {
+            Slice pattern = utf8Slice("_" + value).slice(1, value.length());
+            Slice data = allocate(2050).slice(3, 2047);
+            data.fill((byte) 'x');
+            data.setBytes(0, pattern);
+            // For the longer pattern, this shares the head but differs in the remaining bytes.
+            data.setBytes(600, utf8Slice("test-mismatch"));
+            data.setBytes(1001, pattern);
+            data.setBytes(data.length() - pattern.length(), pattern);
+            assertIndexOf(data, pattern, 0, 0);
+            assertIndexOf(data, pattern, 1, value.length() == 4 ? 600 : 1001);
+            assertIndexOf(data, pattern, 601, 1001);
+            assertIndexOf(data, pattern, 1002, data.length() - pattern.length());
+            data.clear(data.length() - pattern.length(), pattern.length());
+            assertIndexOf(data, pattern, 1002, -1);
+        }
+    }
+
     public static void assertIndexOf(Slice data, Slice pattern, int offset, int expected)
     {
         assertThat(data.indexOf(pattern, offset)).isEqualTo(expected);
@@ -1031,6 +1052,31 @@ public class TestSlice
 
         assertThatThrownBy(() -> slice.indexOfAnyByte((byte) 'a', (byte) 'p', -1)).isInstanceOf(IndexOutOfBoundsException.class);
         assertThatThrownBy(() -> slice.indexOfAnyByte((byte) 'a', (byte) 'p', slice.length() + 1)).isInstanceOf(IndexOutOfBoundsException.class);
+    }
+
+    @Test
+    public void testIndexOfAnyByteLongScan()
+    {
+        Slice slice = allocate(8208).slice(3, 8205);
+        slice.setByte(0, 'a');
+        slice.setByte(5001, 'a');
+        slice.setByte(6002, 'b');
+        slice.setByte(slice.length() - 1, '!');
+        for (int offset : new int[] {0, 1, 3, 4096}) {
+            for (byte first : new byte[] {'a', 'b', '!', 'x'}) {
+                for (byte second : new byte[] {'a', 'b', '!', 'y'}) {
+                    int expected = -1;
+                    for (int index = offset; index < slice.length(); index++) {
+                        byte current = slice.getByte(index);
+                        if (current == first || current == second) {
+                            expected = index;
+                            break;
+                        }
+                    }
+                    assertThat(slice.indexOfAnyByte(first, second, offset)).isEqualTo(expected);
+                }
+            }
+        }
     }
 
     @Test

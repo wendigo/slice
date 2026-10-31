@@ -1458,12 +1458,6 @@ public final class SliceUtf8
             return length;
         }
 
-        if (length == 1) {
-            // normal ASCII
-            // 0xxx_xxxx
-            return firstByte;
-        }
-
         //
         // Process second byte
         if (position + 1 >= utf8Length) {

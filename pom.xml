@@ -107,13 +107,20 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
                 <configuration>
-                    <!-- run the JMH annotation processor (javac 23+ no longer runs classpath processors by default) -->
-                    <proc>full</proc>
                     <compilerArgs>
                         <arg>--add-modules</arg>
                         <arg>jdk.incubator.vector</arg>
                     </compilerArgs>
                 </configuration>
+                <executions>
+                    <execution>
+                        <id>default-testCompile</id>
+                        <configuration>
+                            <!-- run the JMH annotation processor (javac 23+ no longer runs classpath processors by default) -->
+                            <proc>full</proc>
+                        </configuration>
+                    </execution>
+                </executions>
             </plugin>
 
             <plugin>
